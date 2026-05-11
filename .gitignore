@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code local settings (machine-specific MCP config)
+.claude/settings.local.json
+
+# clone-workflow work artifacts (screenshots, scraped context, QA notes)
+/.tasks/
+/screenshots/
