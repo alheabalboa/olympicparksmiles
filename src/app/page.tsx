@@ -7,6 +7,7 @@ import type { RefObject } from "react";
 const heroSlides = [
   "https://images.unsplash.com/photo-1629909613654-28e377c37b09?q=80&w=2400&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1606811971618-4486d14f3f99?q=80&w=2400&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?q=80&w=2400&auto=format&fit=crop",
 ];
 
 function HeroBackgroundLayers({
@@ -14,60 +15,68 @@ function HeroBackgroundLayers({
 }: {
   containerRef: RefObject<HTMLElement | null>;
 }) {
+  // Auto-rotating crossfade between hero images (Klaas-style ambient slider feel)
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % heroSlides.length);
+    }, 5500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Scroll-driven parallax: the whole slide stack scales 1.0 → 1.15 and drifts up as the user scrolls past the hero
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end start"],
   });
-
-  // Hero outer is 150vh; sticky inner is 100vh → sticky pins for ~33% of total scroll range.
-  // All scroll-driven phases must complete before progress 0.33 (when sticky unpins).
-  // Phase A (0 → 0.13): image 1 settles from scale 1.035 → 1.0
-  const img1Scale = useTransform(scrollYProgress, [0, 0.13], [1.035, 1.0], {
-    clamp: true,
-  });
-  // Phase B (0.13 → 0.33): wipe overlay slides up from below (101%) to fully cover (0%)
-  const wipeY = useTransform(scrollYProgress, [0.13, 0.33], ["101%", "0%"], {
-    clamp: true,
-  });
-  // Phase C (0.33 → 0.66): image 2 scales from 1.3 → 1.0 (seen if user reverses scroll)
-  const img2Scale = useTransform(scrollYProgress, [0.33, 0.66], [1.3, 1.0], {
-    clamp: true,
-  });
-  // Vertical timeline indicator on right edge tracks the visible scroll-pinned range
-  const timelineY = useTransform(scrollYProgress, [0, 0.33], ["-44%", "101%"], {
-    clamp: true,
-  });
+  const slideScale = useTransform(scrollYProgress, [0, 0.5], [1, 1.15], { clamp: true });
+  const slideY = useTransform(scrollYProgress, [0, 0.5], ["0%", "-8%"], { clamp: true });
+  const timelineY = useTransform(scrollYProgress, [0, 0.33], ["-44%", "101%"], { clamp: true });
 
   return (
     <>
-      {/* Image 2 sits behind image 1 — revealed after the wipe lifts off on continued scroll */}
-      <motion.div style={{ scale: img2Scale }} className="absolute inset-0 z-0">
-        <img
-          src={heroSlides[1]}
-          alt=""
-          aria-hidden
-          className="h-full w-full object-cover"
-        />
-      </motion.div>
-      {/* Image 1 — the visible hero image with subtle scale-down parallax */}
-      <motion.div style={{ scale: img1Scale }} className="absolute inset-0 z-[1]">
-        <img
-          src={heroSlides[0]}
-          alt=""
-          aria-hidden
-          className="h-full w-full object-cover"
-        />
-      </motion.div>
-      {/* Wipe overlay — slides up to cover image 1 as the user scrolls past the hero */}
+      {/* Stacked slides — crossfade between images while parallaxing on scroll */}
       <motion.div
-        style={{ y: wipeY }}
-        className="absolute inset-0 z-[2] bg-[#03192c]"
-      />
-      {/* Gradient + radial overlays on top of the imagery for legible hero text */}
-      <div className="absolute inset-0 z-[3] bg-gradient-to-b from-[#03192c]/40 via-[#03192c]/55 to-[#03192c]/90" />
-      <div className="absolute inset-0 z-[3] bg-[radial-gradient(circle_at_30%_40%,rgba(3,25,44,0.2),rgba(3,25,44,0.85))]" />
-      {/* Vertical scroll-progress timeline indicator (Klaas .slide-timeline) */}
-      <div className="absolute right-6 top-1/2 z-[4] hidden h-[154px] w-px -translate-y-1/2 overflow-hidden bg-white/15 lg:right-16 lg:block">
+        style={{ scale: slideScale, y: slideY }}
+        className="absolute inset-0 z-0"
+      >
+        {heroSlides.map((src, i) => (
+          <motion.div
+            key={src}
+            initial={false}
+            animate={{ opacity: i === activeIndex ? 1 : 0, scale: i === activeIndex ? 1 : 1.08 }}
+            transition={{ duration: 1.6, ease: [0.4, 0, 0.2, 1] }}
+            className="absolute inset-0"
+          >
+            <img
+              src={src}
+              alt=""
+              aria-hidden
+              className="h-full w-full object-cover"
+              loading={i === 0 ? "eager" : "lazy"}
+            />
+          </motion.div>
+        ))}
+      </motion.div>
+      {/* Dark gradient + radial overlays for hero text contrast */}
+      <div className="absolute inset-0 z-[2] bg-gradient-to-b from-[#03192c]/55 via-[#03192c]/40 to-[#03192c]/90" />
+      <div className="absolute inset-0 z-[2] bg-[radial-gradient(ellipse_at_30%_40%,rgba(3,25,44,0)_0%,rgba(3,25,44,0.6)_70%)]" />
+      {/* Slide indicators (bottom-right) */}
+      <div className="absolute bottom-[140px] right-6 z-[3] hidden flex-col items-end gap-3 lg:bottom-[150px] lg:right-16 lg:flex">
+        {heroSlides.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Slide ${i + 1}`}
+            onClick={() => setActiveIndex(i)}
+            className={`h-[3px] w-10 transition-all duration-500 ${
+              i === activeIndex ? "bg-[#fcec9b]" : "bg-white/30 hover:bg-white/60"
+            }`}
+          />
+        ))}
+      </div>
+      {/* Vertical scroll-progress timeline (Klaas .slide-timeline) */}
+      <div className="absolute right-6 top-1/2 z-[3] hidden h-[154px] w-px -translate-y-1/2 overflow-hidden bg-white/15 lg:right-16 lg:hidden">
         <motion.div style={{ y: timelineY }} className="h-full w-full bg-white" />
       </div>
     </>
